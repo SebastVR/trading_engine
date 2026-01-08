@@ -16,6 +16,10 @@ plotly==5.24.1
 
 python-dotenv==1.0.1
 
+# Celery para tareas asíncronas
+celery==5.4.0
+redis==5.2.0
+
 # IA (opcional)
 langchain==0.3.13
 langchain-core==0.3.27

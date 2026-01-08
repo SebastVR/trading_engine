@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str | None = None
     TELEGRAM_CHAT_ID: str | None = None
 
+    # Celery config
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
+
     AI_ENABLED: bool = False
     AI_PROVIDER: str  # gemini | openai
     GEMINI_API_KEY: str | None = None
@@ -55,3 +59,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """
+    Función helper para obtener settings (útil para Celery y otros contextos)
+    """
+    return settings
