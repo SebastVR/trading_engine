@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.celery_worker.celery_app import celery_app
 from app.controllers.multi_timeframe_controller import MultiTimeframeController
+from app.controllers.simple_signal_controller import SimpleSignalController
 from app.config.settings import get_settings
 
 # Variable para rastrear la última señal enviada (evitar spam)
@@ -198,3 +199,70 @@ def test_telegram():
             "status": "error",
             "message": str(e)
         }
+
+
+@celery_app.task(name="app.celery_worker.tasks.monitor_market_signals_simple")
+def monitor_market_signals_simple():
+    """
+    MODO EXPERIMENTAL: Tarea periódica sin análisis multi-timeframe
+    - Solo usa 15m
+    - Genera más señales (sin filtro de consenso)
+    - Para comparar con multi-timeframe
+    """
+    try:
+        result = asyncio.run(_check_and_alert_simple())
+        return result
+    except Exception as e:
+        print(f"❌ Error en monitor_market_signals_simple: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+async def _check_and_alert_simple() -> dict:
+    """
+    Verifica si hay señal técnica simple (sin consenso)
+    """
+    settings = get_settings()
+    symbol = settings.SYMBOL or "BTCUSDT"
+    
+    print(f"\n{'='*60}")
+    print(f"🔍 MODO SIMPLE: Monitoreando {symbol} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+    
+    try:
+        # Crear controlador simple (solo 15m)
+        controller = SimpleSignalController(symbol=symbol)
+        result = await controller.get_simple_signal(timeframe="15m")
+        
+        signal = result.get("signal")
+        price = result.get("price")
+        confidence = result.get("confidence", 0)
+        
+        print(f"💰 Precio: ${price}")
+        print(f"🎯 Señal: {signal or 'None'} - Confianza: {confidence}%")
+        
+        if signal:
+            print(f"📱 ¡SEÑAL DETECTADA! {signal}")
+            return {
+                "status": "signal_found",
+                "signal": signal,
+                "price": price,
+                "entry": result.get("entry"),
+                "stop_loss": result.get("stop_loss"),
+                "take_profit": result.get("take_profit"),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            print(f"⚪ Sin señal en este ciclo")
+            return {
+                "status": "no_signal",
+                "price": price
+            }
+            
+    except Exception as e:
+        print(f"❌ Error al analizar mercado (simple): {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    finally:
+        print(f"{'='*60}\n")

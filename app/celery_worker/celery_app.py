@@ -31,6 +31,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/15"),  # Cada 15 minutos
         "args": (),
     },
+    "monitor-market-simple-every-5min": {
+        "task": "app.celery_worker.tasks.monitor_market_signals_simple",
+        "schedule": crontab(minute="*/5"),  # Cada 5 minutos (más frecuente)
+        "args": (),
+    },
 }
 
 if __name__ == "__main__":

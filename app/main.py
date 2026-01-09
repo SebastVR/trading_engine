@@ -3,6 +3,7 @@ from app.config.settings import settings
 from app.middleware.logging import setup_logging_middleware
 from app.routers.trade_router import router as trade_router
 from app.routers.multi_timeframe_router import router as multi_timeframe_router
+from app.routers.simple_signal_router import router as simple_signal_router
 from app.routers.test_router import router as test_router
 from app.controllers.health_controller import router as health_router
 from app.db.session import init_db
@@ -15,6 +16,7 @@ setup_logging_middleware(api)
 api.include_router(health_router, tags=["health"])
 api.include_router(trade_router, prefix="/trades", tags=["trades"])
 api.include_router(multi_timeframe_router, tags=["multi-timeframe"])
+api.include_router(simple_signal_router, tags=["simple-signal"])
 api.include_router(test_router, tags=["testing"])
 
 _trade_manager: TradeManager | None = None
