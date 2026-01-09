@@ -64,8 +64,8 @@ async def _check_and_alert() -> dict:
         print(f"🎯 Señal: {signal or 'None'} - Confianza: {confidence}%")
         print(f"📊 Votos: {votes.get('long', 0)} LONG, {votes.get('short', 0)} SHORT, {votes.get('neutral', 0)} NEUTRAL")
         
-        # Verificar si hay señal con buena confianza
-        if signal and confidence >= 50:
+        # Verificar si hay señal con buena confianza (reducido de 50% a 40%)
+        if signal and confidence >= 40:
             # Verificar si es una señal nueva (evitar spam)
             should_send = _should_send_alert(signal, current_price, confidence)
             

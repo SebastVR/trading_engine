@@ -55,7 +55,7 @@ class StrategyEngine:
         swing_low = float(recent["low"].min())
 
         # ruptura simple (cierre por encima del máximo reciente de N velas)
-        lookback = 20
+        lookback = 15  # Reducido de 20 a 15 para ser más sensible a breakouts
         prev_high = float(df["high"].tail(lookback).max())
         prev_low = float(df["low"].tail(lookback).min())
 

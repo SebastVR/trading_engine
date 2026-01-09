@@ -86,8 +86,8 @@ class MultiTimeframeController:
                         )
                     }
                     
-                    # 📱 Enviar alerta a Telegram si hay consenso con buena confianza
-                    if analysis.confidence_score >= 50:
+                    # 📱 Enviar alerta a Telegram si hay consenso con buena confianza (reducido de 50% a 40%)
+                    if analysis.confidence_score >= 40:
                         await self.telegram_service.send_multi_timeframe_alert(
                             symbol=self.symbol,
                             consensus_signal=analysis.consensus_signal.value,
