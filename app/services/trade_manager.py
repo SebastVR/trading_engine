@@ -55,12 +55,30 @@ class StrategyEngine:
         swing_low = float(recent["low"].min())
 
         # ruptura simple (cierre por encima del máximo reciente de N velas)
-        lookback = 15  # Reducido de 20 a 15 para ser más sensible a breakouts
+        # AJUSTADO: Reducido de 15 a 5 para capturar breakouts más frecuentes
+        # DINÁMICO: Si ATR es alto (volátil), usar lookback aún menor para máxima sensibilidad
+        base_lookback = 5  # CAMBIO: de 8 a 5 para +40% más señales
+        if last_atr > 0:
+            # Si volatilidad es MUY ALTA (ATR > 500 para BTCUSDT), reducir lookback a 3
+            if last_atr > 500:
+                lookback = 3  # CAMBIO: de 5 a 3 para máxima sensibilidad
+            # Si volatilidad es NORMAL, usar 5
+            else:
+                lookback = base_lookback
+        else:
+            lookback = base_lookback
+            
         prev_high = float(df["high"].tail(lookback).max())
         prev_low = float(df["low"].tail(lookback).min())
 
-        breakout_up = last_price > prev_high
-        breakout_down = last_price < prev_low
+        # AJUSTE: Zona de entrada (0.3% antes de romper exacto) para mejor precio y más señales
+        # En lugar de esperar ruptura EXACTA, aceptamos entrada cuando está CERCA del nivel
+        entry_zone_pct = 0.003  # 0.3% de tolerancia
+        entry_zone_high = prev_high * (1 - entry_zone_pct)  # 0.3% debajo del high
+        entry_zone_low = prev_low * (1 + entry_zone_pct)    # 0.3% arriba del low
+        
+        breakout_up = last_price > entry_zone_high
+        breakout_down = last_price < entry_zone_low
 
         # filtros RSI
         last_rsi = float(rsi_v[-1]) if not np.isnan(rsi_v[-1]) else 50.0
@@ -87,18 +105,20 @@ class StrategyEngine:
                 print(f"   ⚠️  Sin tendencia clara")
             
             # Estructura / Breakout
-            print(f"\n2️⃣  RUPTURA (Breakout últimas {lookback} velas):")
+            print(f"\n2️⃣  RUPTURA (Zona de entrada - {lookback} velas):")
             print(f"   High previo: ${prev_high:,.2f}")
+            print(f"   Zona entrada HIGH: ${entry_zone_high:,.2f} (0.3% debajo)")
             print(f"   Low previo: ${prev_low:,.2f}")
+            print(f"   Zona entrada LOW: ${entry_zone_low:,.2f} (0.3% arriba)")
             print(f"   Precio actual: ${last_price:,.2f}")
             if breakout_up:
-                print(f"   ✅ BREAKOUT ALCISTA (precio > high previo)")
+                print(f"   ✅ BREAKOUT ALCISTA (precio > zona entrada)")
             elif breakout_down:
-                print(f"   ✅ BREAKOUT BAJISTA (precio < low previo)")
+                print(f"   ✅ BREAKOUT BAJISTA (precio < zona entrada)")
             else:
-                diff_to_high = ((prev_high - last_price) / last_price) * 100
-                diff_to_low = ((last_price - prev_low) / last_price) * 100
-                print(f"   ❌ Sin breakout (falta {diff_to_high:.2f}% para high, {diff_to_low:.2f}% desde low)")
+                diff_to_high = ((entry_zone_high - last_price) / last_price) * 100
+                diff_to_low = ((last_price - entry_zone_low) / last_price) * 100
+                print(f"   ❌ Sin breakout (falta {diff_to_high:.2f}% para zona high, {diff_to_low:.2f}% desde zona low)")
             
             # RSI
             print(f"\n3️⃣  RSI (periodo {settings.RSI_PERIOD}):")
@@ -132,21 +152,47 @@ class StrategyEngine:
 
             # Resumen de señal LONG
             print(f"\n📈 EVALUACIÓN LONG:")
-            print(f"   {'✅' if trend_up else '❌'} Tendencia alcista")
-            print(f"   {'✅' if breakout_up else '❌'} Breakout alcista")
-            print(f"   {'✅' if rsi_ok_long else '❌'} RSI en rango LONG")
-            print(f"   {'✅' if last_atr > 0 else '❌'} ATR válido")
+            print(f"   {'✅' if trend_up else '❌'} Tendencia alcista (MA Fast > MA Slow)")
+            print(f"   {'✅' if breakout_up else '❌'} Breakout alcista (precio > zona entrada)")
+            print(f"   {'✅' if rsi_ok_long else '❌'} RSI en rango LONG ({settings.RSI_MIN}-{settings.RSI_MAX})")
+            print(f"   {'✅' if last_atr > 0 else '❌'} ATR válido (para SL)")
             long_valid = trend_up and breakout_up and rsi_ok_long and last_atr > 0
-            print(f"   {'🟢 SEÑAL LONG VÁLIDA' if long_valid else '🔴 No cumple todos los requisitos'}")
+            
+            if long_valid:
+                print(f"   🟢 SEÑAL LONG VÁLIDA - ¡GENERANDO ORDEN!")
+            else:
+                missing = []
+                if not trend_up:
+                    missing.append(f"Tendencia alcista (MA {settings.MA_FAST}={ma_fast[-1]:.0f} <= MA {settings.MA_SLOW}={ma_slow[-1]:.0f})")
+                if not breakout_up:
+                    missing.append(f"Breakout alcista (precio ${last_price:.2f} <= zona ${entry_zone_high:.2f})")
+                if not rsi_ok_long:
+                    missing.append(f"RSI en rango ({last_rsi:.1f} fuera {settings.RSI_MIN}-{settings.RSI_MAX})")
+                if not last_atr > 0:
+                    missing.append("ATR válido")
+                print(f"   🔴 FALTA: {missing[0] if missing else 'desconocido'}")
 
             # Resumen de señal SHORT
             print(f"\n📉 EVALUACIÓN SHORT:")
-            print(f"   {'✅' if trend_down else '❌'} Tendencia bajista")
-            print(f"   {'✅' if breakout_down else '❌'} Breakout bajista")
-            print(f"   {'✅' if rsi_ok_short else '❌'} RSI en rango SHORT")
-            print(f"   {'✅' if last_atr > 0 else '❌'} ATR válido")
+            print(f"   {'✅' if trend_down else '❌'} Tendencia bajista (MA Fast < MA Slow)")
+            print(f"   {'✅' if breakout_down else '❌'} Breakout bajista (precio < zona entrada)")
+            print(f"   {'✅' if rsi_ok_short else '❌'} RSI en rango SHORT ({100-settings.RSI_MAX}-{100-settings.RSI_MIN})")
+            print(f"   {'✅' if last_atr > 0 else '❌'} ATR válido (para SL)")
             short_valid = trend_down and breakout_down and rsi_ok_short and last_atr > 0
-            print(f"   {'🟢 SEÑAL SHORT VÁLIDA' if short_valid else '🔴 No cumple todos los requisitos'}")
+            
+            if short_valid:
+                print(f"   🟢 SEÑAL SHORT VÁLIDA - ¡GENERANDO ORDEN!")
+            else:
+                missing = []
+                if not trend_down:
+                    missing.append(f"Tendencia bajista (MA {settings.MA_FAST}={ma_fast[-1]:.0f} >= MA {settings.MA_SLOW}={ma_slow[-1]:.0f})")
+                if not breakout_down:
+                    missing.append(f"Breakout bajista (precio ${last_price:.2f} >= zona ${entry_zone_low:.2f})")
+                if not rsi_ok_short:
+                    missing.append(f"RSI en rango ({last_rsi:.1f} fuera {100-settings.RSI_MAX}-{100-settings.RSI_MIN})")
+                if not last_atr > 0:
+                    missing.append("ATR válido")
+                print(f"   🔴 FALTA: {missing[0] if missing else 'desconocido'}")
             print("="*80 + "\n")
 
         # señal long
@@ -207,6 +253,38 @@ class StrategyEngine:
 
 
 class TradeRepository:
+    async def create_trade_auto(
+        self,
+        symbol: str,
+        timeframe: str,
+        side: str,
+        entry: float,
+        sl: float,
+        tp: float,
+        strategy_name: str,
+        confirmations: dict,
+        ai_note: str | None = None,
+    ) -> dict:
+        """
+        Crea un trade usando su propia sesión (para Celery tasks que no tienen session)
+        Útil cuando queremos guardar automáticamente desde Telegram alerts
+        """
+        from app.db.session import AsyncSessionLocal
+        
+        async with AsyncSessionLocal() as session:
+            return await self.create_trade(
+                session=session,
+                symbol=symbol,
+                timeframe=timeframe,
+                side=side,
+                entry=entry,
+                sl=sl,
+                tp=tp,
+                strategy_name=strategy_name,
+                confirmations=confirmations,
+                ai_note=ai_note,
+            )
+
     async def create_trade(
         self,
         session: AsyncSession,

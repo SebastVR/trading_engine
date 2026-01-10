@@ -101,6 +101,67 @@ class MultiTimeframeController:
                             stop_loss=best_signal.details.get("stop_loss"),
                             take_profit=best_signal.details.get("take_profit")
                         )
+                        
+                        # 💾 Guardar automáticamente en BD cuando se envía a Telegram
+                        try:
+                            import json
+                            from app.services.trade_manager import TradeRepository
+                            from app.db.session import AsyncSessionLocal
+                            
+                            # Convertir reason (dict) a JSON string para ai_note
+                            ai_note_str = f"Consenso Multi-TF: {analysis.long_votes}L/{analysis.short_votes}S/{analysis.neutral_votes}N"
+                            
+                            # Crear trade en un nuevo event loop (Celery context)
+                            async def save_to_db():
+                                async with AsyncSessionLocal() as session:
+                                    repo = TradeRepository()
+                                    return await repo.create_trade(
+                                        session=session,
+                                        symbol=self.symbol,
+                                        timeframe="multi",
+                                        side=analysis.consensus_signal.value.lower(),
+                                        entry=best_signal.details.get("entry_price"),
+                                        sl=best_signal.details.get("stop_loss"),
+                                        tp=best_signal.details.get("take_profit"),
+                                        strategy_name="multi_timeframe_consensus",
+                                        confirmations={
+                                            "long_votes": analysis.long_votes,
+                                            "short_votes": analysis.short_votes,
+                                            "neutral_votes": analysis.neutral_votes,
+                                            "confidence": analysis.confidence_score,
+                                            "weighted_score": analysis.weighted_score,
+                                        },
+                                        ai_note=ai_note_str
+                                    )
+                            
+                            # Ejecutar en un thread pool para evitar conflicto de event loops
+                            import concurrent.futures
+                            import asyncio
+                            
+                            try:
+                                loop = asyncio.get_event_loop()
+                                if loop.is_running():
+                                    # Ya estamos en loop, usar future en thread
+                                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                                        future = executor.submit(asyncio.run, save_to_db())
+                                        future.result(timeout=5)
+                                else:
+                                    # No hay loop, crear uno
+                                    loop.run_until_complete(save_to_db())
+                            except RuntimeError:
+                                # No hay event loop, crear uno nuevo
+                                new_loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(new_loop)
+                                try:
+                                    new_loop.run_until_complete(save_to_db())
+                                finally:
+                                    new_loop.close()
+                            
+                            print(f"✅ Trade guardado en BD: {self.symbol} {analysis.consensus_signal.value}")
+                        except Exception as e:
+                            import traceback
+                            print(f"⚠️  Error guardando trade en BD: {e}")
+                            traceback.print_exc()
             
             return response
             

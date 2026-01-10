@@ -18,7 +18,7 @@ class TelegramService:
         self.chat_id = getattr(settings, 'TELEGRAM_CHAT_ID', None)
         self.enabled = self.bot_token and self.chat_id
     
-    async def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
+    async def send_message(self, message: str, parse_mode: str = "Markdown") -> bool:
         """
         Envía un mensaje a Telegram
         
@@ -40,31 +40,37 @@ class TelegramService:
             payload = {
                 "chat_id": self.chat_id,
                 "text": message,
-                "parse_mode": parse_mode,
+                "parse_mode": "Markdown",
                 "disable_web_page_preview": True
             }
             
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=10, verify=False) as client:
                 response = await client.post(url, json=payload)
-                response.raise_for_status()
+                
+                if response.status_code != 200:
+                    print(f"❌ Error Telegram ({response.status_code}): {response.text}")
+                    return False
                 
                 print(f"✅ Mensaje enviado a Telegram (chat_id: {self.chat_id})")
                 return True
                 
         except Exception as e:
             print(f"❌ Error enviando mensaje a Telegram: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def send_signal_alert(
         self,
         symbol: str,
         signal_type: str,
-        confidence: float,
         price: float,
         entry: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-        timeframe: Optional[str] = None
+        timeframe: Optional[str] = None,
+        reason: Optional[str] = None,
+        confidence: float = 0.0
     ) -> bool:
         """
         Envía alerta de señal de trading
@@ -79,37 +85,41 @@ class TelegramService:
             icon = "⚪"
             action = "NEUTRAL"
         
-        message = f"""
-{icon} <b>SEÑAL DE TRADING</b> {icon}
-
-<b>Par:</b> {symbol}
-<b>Acción:</b> {action} ({signal_type})
-<b>Confianza:</b> {confidence:.1f}%
-<b>Precio Actual:</b> ${price:,.2f}
-"""
+        # Construir mensaje línea por línea SIN HTML para evitar errores de parsing
+        lines = []
+        lines.append(f"{icon} SEÑAL DE TRADING {icon}")
+        lines.append(f"Par: {symbol}")
+        lines.append(f"Acción: {action} ({signal_type})")
+        lines.append(f"Confianza: {confidence:.1f}%")
+        lines.append(f"Precio Actual: ${price:,.2f}")
+        
+        if reason:
+            lines.append(f"Razón: {reason}")
         
         if timeframe:
-            message += f"<b>Timeframe:</b> {timeframe}\n"
+            lines.append(f"Timeframe: {timeframe}")
         
         if entry:
-            message += f"\n<b>💰 Setup de Trading:</b>\n"
-            message += f"  • Entry: ${entry:,.2f}\n"
+            lines.append("💰 Setup de Trading:")
+            lines.append(f"  • Entry: ${entry:,.2f}")
             
             if stop_loss:
                 risk = abs(entry - stop_loss)
                 risk_pct = (risk / entry) * 100
-                message += f"  • Stop Loss: ${stop_loss:,.2f} (-{risk_pct:.2f}%)\n"
+                lines.append(f"  • Stop Loss: ${stop_loss:,.2f} (-{risk_pct:.2f}%)")
             
             if take_profit:
                 reward = abs(take_profit - entry)
                 reward_pct = (reward / entry) * 100
-                message += f"  • Take Profit: ${take_profit:,.2f} (+{reward_pct:.2f}%)\n"
+                lines.append(f"  • Take Profit: ${take_profit:,.2f} (+{reward_pct:.2f}%)")
             
             if stop_loss and take_profit:
                 rr = abs(take_profit - entry) / abs(entry - stop_loss)
-                message += f"  • R:R = 1:{rr:.2f}\n"
+                lines.append(f"  • R:R = 1:{rr:.2f}")
         
-        message += f"\n⏰ <i>{self._get_timestamp()}</i>"
+        message = "\n".join(lines)
+        
+        message += f"\n⏰ {self._get_timestamp()}"
         
         return await self.send_message(message)
     
@@ -140,45 +150,46 @@ class TelegramService:
             icon = "⚪"
             action = "SIN CONSENSO"
         
-        message = f"""
-{icon} <b>CONSENSO MULTI-TIMEFRAME</b> {icon}
-
-<b>Par:</b> {symbol}
-<b>Decisión:</b> {action}
-<b>Confianza:</b> {confidence:.1f}%
-<b>Score Ponderado:</b> {weighted_score:+.1f}
-
-<b>📊 Votos por Timeframe:</b>
-  • LONG: {long_votes}
-  • SHORT: {short_votes}
-  • NEUTRAL: {neutral_votes}
-
-<b>Precio Actual:</b> ${price:,.2f}
-"""
+        # Construir mensaje línea por línea SIN HTML para evitar errores de parsing
+        lines = []
+        lines.append(f"{icon} CONSENSO MULTI-TIMEFRAME {icon}")
+        lines.append(f"Par: {symbol}")
+        lines.append(f"Decisión: {action}")
+        lines.append(f"Confianza: {confidence:.1f}%")
+        lines.append(f"Score Ponderado: {weighted_score:+.1f}")
+        lines.append("📊 Votos por Timeframe:")
+        lines.append(f"  • LONG: {long_votes}")
+        lines.append(f"  • SHORT: {short_votes}")
+        lines.append(f"  • NEUTRAL: {neutral_votes}")
+        lines.append(f"Precio Actual: ${price:,.2f}")
         
         if consensus_signal and entry:
-            message += f"\n<b>💰 Setup Recomendado:</b>\n"
-            message += f"  • Entry: ${entry:,.2f}\n"
+            lines.append("💰 Setup Recomendado:")
+            lines.append(f"  • Entry: ${entry:,.2f}")
             
             if stop_loss:
                 risk = abs(entry - stop_loss)
                 risk_pct = (risk / entry) * 100
-                message += f"  • Stop Loss: ${stop_loss:,.2f} (-{risk_pct:.2f}%)\n"
+                lines.append(f"  • Stop Loss: ${stop_loss:,.2f} (-{risk_pct:.2f}%)")
             
             if take_profit:
                 reward = abs(take_profit - entry)
                 reward_pct = (reward / entry) * 100
-                message += f"  • Take Profit: ${take_profit:,.2f} (+{reward_pct:.2f}%)\n"
+                lines.append(f"  • Take Profit: ${take_profit:,.2f} (+{reward_pct:.2f}%)")
             
             if stop_loss and take_profit:
                 rr = abs(take_profit - entry) / abs(entry - stop_loss)
-                message += f"  • R:R = 1:{rr:.2f}\n"
+                lines.append(f"  • R:R = 1:{rr:.2f}")
         
-        message += f"\n⏰ <i>{self._get_timestamp()}</i>"
+        message = "\n".join(lines)
+        
+        message += f"\n⏰ {self._get_timestamp()}"
         
         return await self.send_message(message)
     
     def _get_timestamp(self) -> str:
-        """Obtiene timestamp formateado"""
-        from datetime import datetime
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+        """Obtiene timestamp formateado en hora de Colombia (UTC-5)"""
+        from datetime import datetime, timezone, timedelta
+        # Colombia está en UTC-5
+        colombia_tz = timezone(timedelta(hours=-5))
+        return datetime.now(colombia_tz).strftime("%Y-%m-%d %H:%M:%S Colombia")
