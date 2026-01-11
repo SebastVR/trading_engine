@@ -3,13 +3,12 @@ from app.schemas.trade_schema import CreateTradeRequest
 from app.services.trade_manager import TradeRepository
 from app.services.market_service import MarketService
 from app.services.trade_manager import StrategyEngine
-from app.services.ai_service import AIService
 from app.services.chart_service import ChartService
+from app.controllers import ai_controller
 from app.config.settings import settings
 
 repo = TradeRepository()
 market = MarketService()
-ai = AIService()
 charts = ChartService()
 
 
@@ -35,13 +34,17 @@ async def get_live_signal(session: AsyncSession):
     }
     
     if settings.AI_ENABLED:
-        ai_note = await ai.analyze_signal(
-            signal=signal, 
-            symbol=settings.SYMBOL, 
+        # Usar nueva arquitectura de Bedrock para validar signal
+        ai_validation = await ai_controller.validate_signal_quality(
+            signal=signal,
+            symbol=settings.SYMBOL,
             timeframe=settings.TIMEFRAME,
             market_context=market_context
         )
-        signal["ai_note"] = ai_note
+        # Extraer información de validación
+        signal["ai_note"] = ai_validation.get("reasoning", "No disponible")
+        signal["ai_quality_score"] = ai_validation.get("quality_score", 0)
+        signal["ai_recommendation"] = ai_validation.get("recommendation", "UNKNOWN")
 
     return {
         "symbol": settings.SYMBOL,

@@ -5,6 +5,7 @@ from app.routers.trade_router import router as trade_router
 from app.routers.multi_timeframe_router import router as multi_timeframe_router
 from app.routers.simple_signal_router import router as simple_signal_router
 from app.routers.test_router import router as test_router
+from app.routers.ai_router import router as ai_router
 from app.controllers.health_controller import router as health_router
 from app.db.session import init_db
 from app.services.trade_manager import TradeManager
@@ -18,6 +19,7 @@ api.include_router(trade_router, prefix="/trades", tags=["trades"])
 api.include_router(multi_timeframe_router, tags=["multi-timeframe"])
 api.include_router(simple_signal_router, tags=["simple-signal"])
 api.include_router(test_router, tags=["testing"])
+api.include_router(ai_router, tags=["ai"])
 
 _trade_manager: TradeManager | None = None
 

@@ -47,12 +47,23 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
 
     AI_ENABLED: bool = False
-    AI_PROVIDER: str  # gemini | openai
+    AI_PROVIDER: str  # gemini | openai | bedrock
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-1.5-pro"
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o-mini"
     AI_TEMPERATURE: float = 0.2
+
+    # AWS Bedrock Configuration (FASE 1: IA Filter)
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_REGION_NAME: str = "us-east-1"
+    BEDROCK_MODEL: str = "openai.gpt-oss-120b-1:0"
+
+    # IA Filter Settings
+    AI_QUALITY_THRESHOLD: float = 75.0
+    AI_TEMPERATURE_FILTER: float = 0.3
+    AI_MAX_TOKENS: int = 1000
 
     class Config:
         env_file = ".env"
