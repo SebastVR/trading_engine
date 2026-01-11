@@ -45,6 +45,21 @@ async def get_live_signal(session: AsyncSession):
         signal["ai_note"] = ai_validation.get("reasoning", "No disponible")
         signal["ai_quality_score"] = ai_validation.get("quality_score", 0)
         signal["ai_recommendation"] = ai_validation.get("recommendation", "UNKNOWN")
+        
+        # LOGGING PARA OPTIMIZACIÓN (puedes remover después)
+        print(f"\n{'='*70}")
+        print(f"🎯 SIGNAL ANALYSIS - {settings.SYMBOL}")
+        print(f"{'='*70}")
+        print(f"📊 Direction: {signal.get('signal')}")
+        print(f"💰 Entry: {signal.get('entry')}")
+        print(f"⛔ Stop Loss: {signal.get('stop_loss')}")
+        print(f"🎯 Take Profit: {signal.get('take_profit')}")
+        print(f"✅ Confirmations: {signal.get('confirmations')}")
+        print(f"{'─'*70}")
+        print(f"🔮 AI QUALITY SCORE: {signal.get('ai_quality_score')}/100")
+        print(f"⚡ AI RECOMMENDATION: {signal.get('ai_recommendation')}")
+        print(f"💡 AI REASONING: {signal.get('ai_note')[:150]}...")
+        print(f"{'='*70}\n")
 
     return {
         "symbol": settings.SYMBOL,
