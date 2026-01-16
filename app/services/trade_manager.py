@@ -375,6 +375,11 @@ class TradeRepository:
         await session.commit()
 
     def _to_dict(self, t: Trade) -> dict:
+        # confirmations_json viene de BD como string; si está vacío/dañado, no deberíamos tumbar el flujo.
+        try:
+            confirmations = json.loads(t.confirmations_json or "{}")
+        except Exception:
+            confirmations = {}
         return {
             "id": t.id,
             "symbol": t.symbol,
@@ -393,7 +398,7 @@ class TradeRepository:
             "pnl_abs": t.pnl_abs,
             "pnl_pct": t.pnl_pct,
             "strategy_name": t.strategy_name,
-            "confirmations": json.loads(t.confirmations_json or "{}"),
+            "confirmations": confirmations,
             "ai_note": t.ai_note,
         }
 

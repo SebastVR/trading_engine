@@ -100,15 +100,24 @@ class SimpleSignalController:
                     "confirmations": signal_result.get("reason"),
                 }
 
-                ai_validation = await ai_controller.validate_signal_quality(
-                    signal=signal_for_ai,
-                    symbol=self.symbol,
-                    timeframe=timeframe,
-                    market_context=market_context,
-                )
+                try:
+                    ai_validation = await ai_controller.validate_signal_quality(
+                        signal=signal_for_ai,
+                        symbol=self.symbol,
+                        timeframe=timeframe,
+                        market_context=market_context,
+                    )
+                except Exception as e:
+                    # Nunca tumbar el endpoint por un fallo de IA/parseo.
+                    ai_validation = {
+                        "quality_score": None,
+                        "recommendation": "WAIT",
+                        "reasoning": f"ai_error: {e}",
+                    }
 
                 # Adjuntar resultado IA al signal_result para downstream (Telegram/DB)
                 signal_result["ai_validation"] = ai_validation
+                # Normalizar shape (evitar None/strings raros)
                 signal_result["ai_note"] = ai_validation.get("reasoning")
                 signal_result["ai_quality_score"] = ai_validation.get("quality_score")
                 signal_result["ai_recommendation"] = ai_validation.get("recommendation")
@@ -128,6 +137,14 @@ class SimpleSignalController:
             
             # Enviar alerta a Telegram si hay señal
             if signal_result["signal"]:
+                # Incluir datos IA también en la respuesta del endpoint
+                response["ai_recommendation"] = signal_result.get("ai_recommendation")
+                response["ai_quality_score"] = signal_result.get("ai_quality_score")
+                response["ai_note"] = signal_result.get("ai_note")
+
+                # Normalizar la señal una sola vez para aplicar filtros sin depender del enum interno
+                signal_value = (response.get("signal") or "").upper()
+
                 # Guardrails (optimización): horario Colombia
                 allowed = _parse_allowed_hours(getattr(settings, "SIGNAL_ALLOWED_HOURS_CO", ""))
                 if allowed:
@@ -140,12 +157,31 @@ class SimpleSignalController:
                         }
 
                 # Guardrails (optimización): desactivar shorts si está configurado
-                if getattr(settings, "DISABLE_SHORTS", False) and signal_result["signal"].value == "SHORT":
+                if getattr(settings, "DISABLE_SHORTS", False) and signal_value == "SHORT":
+                    print("[simple-signal] filtered shorts_disabled")
+                    # Incluir explícitamente `filtered: true` para facilitar monitoreo en endpoint
                     return {
                         **response,
                         "filtered": True,
                         "filtered_reason": "shorts_disabled",
                     }
+
+                # Guardrails (optimización): enforcement IA
+                # Nota: este filtro NO debería depender del envío a Telegram; se aplica a la respuesta del endpoint.
+                if settings.AI_ENABLED:
+                    enforce = getattr(settings, "AI_FILTER_ENFORCE", False)
+                    if enforce:
+                        recommendation = (response.get("ai_recommendation") or "").upper()
+                        score = response.get("ai_quality_score")
+                        if recommendation != "OPEN" and not (
+                            isinstance(score, (int, float)) and score >= settings.AI_QUALITY_THRESHOLD
+                        ):
+                            print(f"[simple-signal] filtered ai_block reco={recommendation} score={score}")
+                            return {
+                                **response,
+                                "filtered": True,
+                                "filtered_reason": f"ai_block(recommendation={recommendation},score={score})",
+                            }
 
                 # Formatear reason dict como string legible
                 reason_dict = signal_result.get("reason", {})
@@ -155,23 +191,7 @@ class SimpleSignalController:
                 else:
                     reason_str = str(reason_dict)
 
-                # Enforcement IA: si está activo, solo dejamos pasar OPEN o score >= threshold
-                if settings.AI_ENABLED:
-                    enforce = getattr(settings, "AI_FILTER_ENFORCE", False)
-                    if enforce:
-                        recommendation = (signal_result.get("ai_recommendation") or "").upper()
-                        score = signal_result.get("ai_quality_score")
-                        if recommendation != "OPEN" and not (
-                            isinstance(score, (int, float)) and score >= settings.AI_QUALITY_THRESHOLD
-                        ):
-                            return {
-                                **response,
-                                "filtered": True,
-                                "filtered_reason": f"ai_block(recommendation={recommendation},score={score})",
-                                "ai_recommendation": signal_result.get("ai_recommendation"),
-                                "ai_quality_score": signal_result.get("ai_quality_score"),
-                                "ai_note": signal_result.get("ai_note"),
-                            }
+                # Si llegamos aquí, la señal pasó los filtros. Se envía Telegram + se guarda en BD.
                 
                 await self.telegram_service.send_signal_alert(
                     symbol=self.symbol,

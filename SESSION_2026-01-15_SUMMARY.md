@@ -80,6 +80,30 @@ Quedaron disponibles (y verificados en runtime) los siguientes controles:
   - `ai_quality_score`
   - `ai_recommendation`
 
+## 🛠️ Hotfixes de estabilidad (post-commit)
+
+Después del push se aplicaron ajustes adicionales para dejar el sistema **estable para monitoreo 48h**:
+
+### `app/controllers/simple_signal_controller.py`
+- Se hizo el filtro de shorts **más robusto**:
+  - en vez de depender del enum interno, se normaliza `signal_value = (response["signal"] or "").upper()`
+  - con `DISABLE_SHORTS=True`, si `signal_value == "SHORT"` se devuelve:
+    - `filtered: true`
+    - `filtered_reason: "shorts_disabled"`
+- Se hardened el flujo de IA:
+  - si la llamada al IA Filter falla (por ejemplo, parseo/JSON inválido), el endpoint **no retorna 500**
+  - se degrada a una validación tipo `WAIT` con `ai_error` en la nota
+- Se movió el enforcement IA a una etapa más temprana para que el endpoint pueda devolver `filtered=true` de forma consistente cuando aplique.
+
+### `app/services/trade_manager.py`
+- Se agregó un guard clause al parseo de `confirmations_json` para evitar `JSONDecodeError` cuando viene vacío/dañado:
+  - si falla el parseo → `confirmations = {}`
+  - esto reduce el ruido tipo `Expecting value: line 1 column 1 (char 0)`
+
+### Estado de monitoreo
+- Se validó en runtime que los filtros responden y que el endpoint puede devolver respuestas filtradas.
+- Queda pendiente seguir mitigando el origen exacto del `Expecting value...` en rutas multi-timeframe, pero ya no debería tumbar el sistema.
+
 ## 🧪 Verificaciones hechas hoy
 
 - Los contenedores se levantaron con `docker compose up --build`.
