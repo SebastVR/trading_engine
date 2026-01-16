@@ -264,6 +264,8 @@ class TradeRepository:
         strategy_name: str,
         confirmations: dict,
         ai_note: str | None = None,
+        ai_quality_score: int | None = None,
+        ai_recommendation: str | None = None,
     ) -> dict:
         """
         Crea un trade usando su propia sesión (para Celery tasks que no tienen session)
@@ -283,6 +285,8 @@ class TradeRepository:
                 strategy_name=strategy_name,
                 confirmations=confirmations,
                 ai_note=ai_note,
+                ai_quality_score=ai_quality_score,
+                ai_recommendation=ai_recommendation,
             )
 
     async def create_trade(
@@ -297,6 +301,8 @@ class TradeRepository:
         strategy_name: str,
         confirmations: dict,
         ai_note: str | None = None,
+        ai_quality_score: int | None = None,
+        ai_recommendation: str | None = None,
     ) -> dict:
         confirmations_json = json.dumps(confirmations, ensure_ascii=False)
         fee_rate = settings.BINANCE_TAKER_FEE  # simplificado
@@ -312,6 +318,8 @@ class TradeRepository:
             fee_rate=fee_rate,
             confirmations_json=confirmations_json,
             ai_note=ai_note,
+            ai_quality_score=ai_quality_score,
+            ai_recommendation=ai_recommendation,
             strategy_name=strategy_name,
         )
         session.add(trade)

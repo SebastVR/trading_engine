@@ -82,6 +82,8 @@ async def create_trade(payload: dict, session: AsyncSession):
         strategy_name=req.strategy_name,
         confirmations=req.confirmations,
         ai_note=req.confirmations.get("ai_note"),
+        ai_quality_score=req.confirmations.get("ai_quality_score"),
+        ai_recommendation=req.confirmations.get("ai_recommendation"),
     )
     return trade
 

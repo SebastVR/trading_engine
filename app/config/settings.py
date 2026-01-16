@@ -62,8 +62,17 @@ class Settings(BaseSettings):
 
     # IA Filter Settings
     AI_QUALITY_THRESHOLD: float = 75.0
+    # Si está activo, el sistema SOLO enviará/guardará señales cuando la IA apruebe.
+    # (Esto permite cortar de inmediato el ruido de señales de baja calidad)
+    AI_FILTER_ENFORCE: bool = False
     AI_TEMPERATURE_FILTER: float = 0.3
     AI_MAX_TOKENS: int = 1000
+
+    # Trading safeguards (optimización FASE 1)
+    DISABLE_SHORTS: bool = False
+    # Filtrar señales por ventana horaria (hora Colombia). Ej: "7-17,19-20".
+    # Vacío = no filtra.
+    SIGNAL_ALLOWED_HOURS_CO: str = ""
 
     class Config:
         env_file = ".env"

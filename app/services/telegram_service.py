@@ -70,7 +70,10 @@ class TelegramService:
         take_profit: Optional[float] = None,
         timeframe: Optional[str] = None,
         reason: Optional[str] = None,
-        confidence: float = 0.0
+        confidence: float = 0.0,
+        ai_recommendation: Optional[str] = None,
+        ai_quality_score: Optional[int] = None,
+        ai_reasoning: Optional[str] = None,
     ) -> bool:
         """
         Envía alerta de señal de trading
@@ -116,6 +119,20 @@ class TelegramService:
             if stop_loss and take_profit:
                 rr = abs(take_profit - entry) / abs(entry - stop_loss)
                 lines.append(f"  • R:R = 1:{rr:.2f}")
+
+        # IA Filter (FASE 1): se muestra al final para no romper el formato actual
+        if ai_recommendation or ai_quality_score is not None or ai_reasoning:
+            lines.append("🤖 IA (Filtro de calidad):")
+            if ai_recommendation:
+                lines.append(f"  • Recomendación: {ai_recommendation}")
+            if ai_quality_score is not None:
+                lines.append(f"  • Score: {ai_quality_score}/100")
+            if ai_reasoning:
+                # Truncar para evitar mensajes demasiado largos
+                snippet = ai_reasoning.strip().replace("\n", " ")
+                if len(snippet) > 220:
+                    snippet = snippet[:220] + "..."
+                lines.append(f"  • Nota: {snippet}")
         
         message = "\n".join(lines)
         

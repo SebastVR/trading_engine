@@ -36,3 +36,7 @@ class Trade(Base):
     strategy_name: Mapped[str] = mapped_column(String(80), default="multi_confirm_v1")
     confirmations_json: Mapped[str] = mapped_column(Text, default="{}")  # JSON string
     ai_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # IA Filter (FASE 1) fields
+    ai_quality_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ai_recommendation: Mapped[str | None] = mapped_column(String(20), nullable=True)
